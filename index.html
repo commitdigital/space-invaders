@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Space Invaders</title>
+  <style>
+    body {
+      background: #000;
+    }
+    .field {
+      border-left: 3px solid #33ff00;
+      border-right: 3px solid #33ff00;
+      height: 600px;
+      left: 50%;
+      margin-left: -375px;
+      margin-top: -300px;
+      overflow: hidden;
+      position: absolute;
+      top: 50%;
+      width: 750px;
+    }
+    .score {
+      font-family: courier;
+      color: #fff;
+      padding: 6px;
+    }
+    .score span {
+      color: #33ff00;
+    }
+    .ship {
+      height: 24px;
+      position: absolute;
+      top: 561px;
+      width: 48px;
+    }
+    .missile {
+      background: #fff;
+      position: absolute;
+      height: 12px;
+      width: 3px;
+    }
+    .invader {
+      background-repeat: no-repeat;
+      background-position: top center;
+      position: absolute;
+      height: 24px;
+      width: 36px;
+    }
+    @keyframes invader1 {
+      0%  {background-image: url('invader1.png');}
+      50% {background-image: url('invader1b.png');}
+      100%  {background-image: url('invader1.png');}
+    }
+    .invader0, .invader2, .invader4 {
+      animation-name: invader1;
+      animation-duration: 0.75s;
+      animation-iteration-count: infinite;
+    }
+    @keyframes invader2 {
+      0%  {background-image: url('invader2.png');}
+      50% {background-image: url('invader2b.png');}
+      100%  {background-image: url('invader2.png');}
+    }
+    .invader1, .invader3 {
+      animation-name: invader2;
+      animation-duration: 0.75s;
+      animation-iteration-count: infinite;
+    }
+    .shield {
+      background-repeat: no-repeat;
+      background-position: top center;
+      position: absolute;
+      height: 60px;
+      width: 78px;
+    }
+    .shield0 { background-image: url('shield0.png'); }
+    .shield1 { background-image: url('shield1.png'); }
+    .shield2 { background-image: url('shield2.png'); }
+    .shield3 { background-image: url('shield3.png'); }
+    .shield4 { background-image: url('shield4.png'); }
+    .shield5 { background-image: url('shield5.png'); }
+    .shield6 { background-image: url('shield6.png'); }
+  </style>
+</head>
+<body>
+  <div class="field" id="field">
+    <div class="score">
+      Score:
+      <span id="score">0</span>
+    </div>
+    <img id="ship" class="ship" src="ship.png">
+  </div>
+  <script>
+    let rightPressed = false;
+    let leftPressed = false;
+    let spacePressed = false;
+
+    let score = 0;
+    let lives = 3;
+    const shipHeight = 27;
+    const shipWidth = 48;
+    const fieldWidth = 750;
+    const fieldHeight = 600;
+    let shipPos = {x:0, y:0, w: 48, h:27};
+    const maxDamage = 6;
+
+    const ms = () => Date.now();
+
+    let lastMissile = ms();
+    const missileGap = 250;
+
+    const missiles = [];
+    const invaders = [];
+    const shields = [];
+    let invaderDirection = 1;
+    let invaderStep = 0;
+
+    function increaseScore(amount) {
+      score += amount;
+      updateScore();
+    }
+
+    function updateScore() {
+      document.getElementById('score').innerText = score;
+    }
+
+    window.requestAnimationFrame(gameLoop);
+
+    function reset(newScore) {
+      score = newScore;
+      updateScore();
+      clearInvaders();
+      clearMissiles();
+      clearShields();
+      setupInvaders();
+      setupShields();
+      resetShipPos();
+    }
+
+    function resetShipPos() {
+      shipPos.x = (fieldWidth / 2) - (shipWidth / 2);
+      shipPos.y = fieldHeight - shipHeight - 12;
+    }
+
+    function gameLoop() {
+      if (invaders.length === 0) {
+        reset(score);
+      }
+
+      draw();
+
+      moveInvaders();
+      moveMissiles();
+      handleMissiles();
+
+      if (rightPressed && shipPos.x < (fieldWidth - shipWidth)) {
+        shipPos.x += 6;
+      } else if (leftPressed && shipPos.x > 0) {
+        shipPos.x -= 6;
+      } else if (spacePressed) {
+        fireMissile();
+      }
+
+      window.requestAnimationFrame(gameLoop);
+    }
+
+    function clearMissiles() {
+      clear(missiles);
+    }
+
+    function clearInvaders() {
+      clear(invaders);
+    }
+
+    function clearShields() {
+      clear(shields);
+    }
+
+    function clear(objects) {
+      for (let i = 0; i < objects.length; i++) {
+        objects[i].el.remove();
+      }
+      objects.splice(0, objects.length);
+    }
+
+    function setupInvaders() {
+      invaderDirection = 1;
+      invaderStep = 0;
+      for (let row = 0; row < 5; row ++) {
+        for (let column = 0; column < 11; column ++) {
+          setupInvader(row, column);
+        }
+      }
+    }
+
+    function setupInvader(row, column) {
+      const invader = {
+        x: column * 51,
+        y: 36 + row * 51,
+        w: 36,
+        h: 24,
+        el: createInvaderElement(row)
+      }
+      invader.el.style.left = invader.x + 'px';
+      invader.el.style.top = invader.y + 'px';
+      invaders.push(invader);
+    }
+
+    function createInvaderElement(row) {
+      const el = document.createElement('div');
+      el.className = `invader invader${row}`;
+      document.getElementById('field').appendChild(el);
+      return el;
+    }
+
+    function setupShields() {
+      for (let i = 0; i < 4; i++) {
+        setupShield(i);
+      }
+    }
+
+    function setupShield(pos) {
+      const shield = {
+        x: 60 + 183 * pos,
+        y: 456,
+        w: 78,
+        h: 60,
+        el: createShieldElement(),
+        damage: 0
+      }
+      shield.el.style.left = shield.x + 'px';
+      shield.el.style.top = shield.y + 'px';
+      shields.push(shield);
+    }
+
+    function createShieldElement(row) {
+      const el = document.createElement('div');
+      el.className = `shield shield0`;
+      document.getElementById('field').appendChild(el);
+      return el;
+    }
+
+    function damageShield(shield) {
+      shield.damage += 1;
+      shield.el.className = `shield shield${shield.damage}`;
+    }
+
+    function moveInvaders() {
+      let moveDown = false;
+      if (invaderDirection === 1 && invaderStep === 66) {
+        invaderDirection = -1;
+        moveDown = true;
+      } else if (invaderDirection === -1 && invaderStep === 0) {
+        invaderDirection = 1;
+        moveDown = true;
+      }
+
+      invaderStep += invaderDirection;
+
+      for (let i = 0; i < invaders.length; i++) {
+        let invader = invaders[i];
+        invader.x += invaderDirection * 3;
+
+        if (moveDown) {
+          invader.y += 9;
+          if (invader.y > 528) {
+            reset(0);
+            return;
+          } else if (invader.y > 420) {
+            clear(shields);
+          }
+        }
+
+        invader.el.style.left = invader.x + 'px';
+        invader.el.style.top = invader.y + 'px';
+
+        if (Math.random() > 0.9993) {
+          const missile = {
+            x: invader.x + (invader.w / 2) - 1,
+            y: invader.y + invader.h,
+            w: 3,
+            h: 12,
+            velocity: 3,
+            el: createMissileElement()
+          };
+          missiles.push(missile);
+        }
+      }
+    }
+
+    function moveMissiles() {
+      for (let i = 0; i < missiles.length; i++) {
+        let missile = missiles[i];
+        missile.y += missile.velocity;
+
+        missile.el.style.left = missile.x + 'px';
+        missile.el.style.top = missile.y + 'px';
+      }
+    }
+
+    function handleMissiles() {
+      for (let m = 0; m < missiles.length; m++) {
+        let missile = missiles[m];
+        if (missile.velocity > 0) {
+          // check collision with ship
+          if (collide(missile, shipPos)) {
+            reset(0);
+            return;
+          }
+        } else {
+          // check collision with invaders
+          for (let i = 0; i < invaders.length; i++) {
+            let invader = invaders[i];
+            if (collide(missile, invader)) {
+              increaseScore(10);
+              console.log('hit!');
+
+              missile.el.remove();
+              invader.el.remove();
+
+              missiles.splice(m, 1);
+              invaders.splice(i, 1);
+
+              if (invaders.length) {
+                handleMissiles();
+              } else {
+                // next level!
+                reset(score);
+              }
+
+              return;
+            }
+          }
+        }
+        // check collision with shields
+        for (let s = 0; s < shields.length; s++) {
+          let shield = shields[s];
+          if (collide(missile, shield)) {
+            missile.el.remove();
+            missiles.splice(m, 1);
+
+            if (shield.damage < maxDamage) {
+              damageShield(shield);
+            } else {
+              shield.el.remove();
+              shields.splice(s, 1);
+            }
+
+            handleMissiles();
+            return;
+          }
+        }
+      }
+    }
+
+    function collide(o1, o2) {
+      return (
+        o1.x < (o2.x + o2.w) &&
+        (o1.x + o1.w) > o2.x &&
+        o1.y < (o2.y + o2.h) &&
+        (o1.y + o1.h) > o2.y
+      );
+    }
+
+    function fireMissile() {
+      console.log(ms() - lastMissile);
+      if ((ms() - lastMissile) < missileGap) {
+        return;
+      }
+      lastMissile = ms();
+
+      const missile = {
+        x: shipPos.x + 23,
+        y: shipPos.y - 15,
+        w: 3,
+        h: 12,
+        velocity: -9,
+        el: createMissileElement()
+      };
+      missiles.push(missile);
+    }
+
+    function createMissileElement() {
+      const el = document.createElement('div');
+      el.className = 'missile';
+      document.getElementById('field').appendChild(el);
+      return el;
+    }
+
+    function draw() {
+      const shipEl = document.getElementById('ship');
+      shipEl.style.left = shipPos.x + 'px';
+      //console.log(shipPos);
+      //console.log(shipEl.style.left);
+      //console.log('draw');
+    }
+
+    document.onkeydown = function(e) {
+      console.log('down', e.keyCode);
+      const keyCode = e.keyCode;
+      if (keyCode === 65) {
+        leftPressed = true;
+      } else if (keyCode === 68) {
+        rightPressed = true;
+      } else if (keyCode === 32) {
+        spacePressed = true;
+      }
+    };
+
+    document.onkeyup = function(e) {
+      console.log('up', e.keyCode);
+      const keyCode = e.keyCode;
+      if (keyCode === 65) {
+        leftPressed = false;
+      } else if (keyCode === 68) {
+        rightPressed = false;
+      } else if (keyCode === 32) {
+        spacePressed = false;
+      }
+    };
+  </script>
+</body>
+</html>
